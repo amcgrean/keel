@@ -4,3 +4,12 @@ node_modules
 .env.local
 .DS_Store
 *.log
+
+# Next.js / TypeScript build artifacts
+next-env.d.ts
+*.tsbuildinfo
+
+# Local Claude Code settings (keep launch.json shareable)
+.claude/settings.local.json
+
+.vercel
