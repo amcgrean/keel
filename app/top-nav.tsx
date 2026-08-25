@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/", label: "Today" },
   { href: "/calendar", label: "Calendar" },
+  { href: "/reminders", label: "Reminders" },
 ];
 
 export function TopNav() {

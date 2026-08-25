@@ -5,6 +5,7 @@ import { signout } from "./login/actions";
 import { respondToSwapRequest } from "./actions";
 import { RequestSwapForm, type DayOption } from "./request-swap-form";
 import { TopNav } from "./top-nav";
+import { remindersOn, kindEmoji, formatTime } from "@/lib/reminders";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,7 @@ export default async function DashboardPage({
     );
   }
 
-  const { supabase, familyId, meMemberId, members, inputs } = data;
+  const { supabase, familyId, meMemberId, members, inputs, reminders } = data;
   const { labelFor, colorFor } = memberMaps(members);
   const { swap: swapParam } = await searchParams;
 
@@ -67,6 +68,14 @@ export default async function DashboardPage({
   const exchanges = findExchanges(days);
   const today = days[0];
   const nextExchange = exchanges[0];
+
+  // Reminders over the next 7 days, only days that actually have something.
+  const reminderDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(TODAY + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + i);
+    const iso = d.toISOString().slice(0, 10);
+    return { iso, i, items: remindersOn(reminders, iso) };
+  }).filter((x) => x.items.length > 0);
 
   const swapOptions: DayOption[] = resolveRange(inputs, TODAY, 60).map((d) => ({
     date: d.date,
@@ -143,6 +152,42 @@ export default async function DashboardPage({
           </div>
         )}
       </section>
+
+      {/* Reminders — next 7 days */}
+      {reminderDays.length > 0 && (
+        <section className="mb-6">
+          <h3 className="font-display text-base mb-2">Coming up</h3>
+          <div className="flex flex-col gap-2">
+            {reminderDays.map((rd) => (
+              <div
+                key={rd.iso}
+                className="rounded-sm border border-line bg-card px-3.5 py-2.5"
+              >
+                <div className="font-mono text-[10px] uppercase tracking-wider text-ink-faint mb-1.5">
+                  {rd.i === 0
+                    ? "Today"
+                    : rd.i === 1
+                      ? "Tomorrow"
+                      : fmt(rd.iso, { weekday: "long", month: "short", day: "numeric" })}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {rd.items.map((r) => (
+                    <div key={r.id} className="flex items-center gap-2 text-sm">
+                      <span className="leading-none">{kindEmoji(r.kind)}</span>
+                      <span className="font-medium">{r.title}</span>
+                      {r.time_of_day && (
+                        <span className="text-ink-faint text-[12px] font-mono">
+                          {formatTime(r.time_of_day)}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Incoming swap requests — need a response */}
       {incoming.length > 0 && (

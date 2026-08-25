@@ -1,5 +1,6 @@
 import { getMembership } from "@/lib/family";
 import type { ScheduleInputs, ParentId } from "@/lib/schedule-engine";
+import type { ReminderRow } from "@/lib/reminders";
 import { createClient } from "@/lib/supabase/server";
 
 export type Member = { id: string; display_name: string; color: string | null };
@@ -20,6 +21,7 @@ export type ScheduleData =
       members: Member[];
       pattern: Pattern;
       exceptions: Exception[];
+      reminders: ReminderRow[];
       inputs: ScheduleInputs;
     };
 
@@ -38,7 +40,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
   const familyId = m.member.family_id;
   const meMemberId = m.member.id;
 
-  const [membersRes, patternRes, exceptionsRes] = await Promise.all([
+  const [membersRes, patternRes, exceptionsRes, remindersRes] = await Promise.all([
     supabase
       .from("family_members")
       .select("id, display_name, color")
@@ -56,11 +58,19 @@ export async function getScheduleData(): Promise<ScheduleData> {
       .from("schedule_exceptions")
       .select("id, date, parent_id, reason")
       .eq("family_id", familyId),
+    // Reminders table may not exist until its migration is applied; a failed
+    // query just yields null data, which we treat as "no reminders yet".
+    supabase
+      .from("reminders")
+      .select("id, title, notes, kind, time_of_day, recurrence, weekdays, on_date")
+      .eq("family_id", familyId)
+      .eq("active", true),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
   const pattern = patternRes.data as Pattern | null;
   const exceptions = (exceptionsRes.data ?? []) as Exception[];
+  const reminders = (remindersRes.data ?? []) as ReminderRow[];
 
   if (!pattern) return { state: "no-pattern", supabase, familyId, meMemberId, members };
 
@@ -74,7 +84,17 @@ export async function getScheduleData(): Promise<ScheduleData> {
     })),
   };
 
-  return { state: "ok", supabase, familyId, meMemberId, members, pattern, exceptions, inputs };
+  return {
+    state: "ok",
+    supabase,
+    familyId,
+    meMemberId,
+    members,
+    pattern,
+    exceptions,
+    reminders,
+    inputs,
+  };
 }
 
 /** Stable colour-slot + label maps for a family's members. */
