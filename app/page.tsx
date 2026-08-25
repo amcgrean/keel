@@ -1,20 +1,13 @@
 import { redirect } from "next/navigation";
-import { getMembership } from "@/lib/family";
-import {
-  resolveRange,
-  findExchanges,
-  type ScheduleInputs,
-  type ParentId,
-} from "@/lib/schedule-engine";
+import { getScheduleData, memberMaps } from "@/lib/schedule-data";
+import { resolveRange, findExchanges } from "@/lib/schedule-engine";
 import { signout } from "./login/actions";
 import { respondToSwapRequest } from "./actions";
 import { RequestSwapForm, type DayOption } from "./request-swap-form";
+import { TopNav } from "./top-nav";
 
 export const dynamic = "force-dynamic";
 
-type MemberRow = { id: string; display_name: string; color: string | null };
-type PatternRow = { id: string; label: string; cycle: ParentId[]; anchor_date: string };
-type ExceptionRow = { id: string; date: string; parent_id: string; reason: string | null };
 type ProposedChange = {
   date: string;
   from_parent_id: string | null;
@@ -28,16 +21,18 @@ type SwapRow = {
   created_at: string;
 };
 
-const PARENT_COLOR_CLASS = ["bg-parentA", "bg-parentB"] as const;
-
 function fmt(iso: string, opts: Intl.DateTimeFormatOptions) {
   return new Date(iso + "T00:00:00Z").toLocaleDateString("en-US", opts);
 }
 
-export default async function DashboardPage() {
-  const m = await getMembership();
-  if (!m) redirect("/login");
-  if (!m.member) {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ swap?: string }>;
+}) {
+  const data = await getScheduleData();
+  if (data.state === "no-auth") redirect("/login");
+  if (data.state === "no-family") {
     return (
       <EmptyState
         title="No family yet"
@@ -45,43 +40,7 @@ export default async function DashboardPage() {
       />
     );
   }
-
-  const { supabase } = m;
-  const familyId = m.member.family_id;
-  const meMemberId = m.member.id;
-
-  const [membersRes, patternRes, exceptionsRes, swapsRes] = await Promise.all([
-    supabase
-      .from("family_members")
-      .select("id, display_name, color")
-      .eq("family_id", familyId)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("schedule_patterns")
-      .select("id, label, cycle, anchor_date")
-      .eq("family_id", familyId)
-      .eq("active", true)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("schedule_exceptions")
-      .select("id, date, parent_id, reason")
-      .eq("family_id", familyId),
-    supabase
-      .from("swap_requests")
-      .select("id, requested_by, proposed_changes, created_at")
-      .eq("family_id", familyId)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false }),
-  ]);
-
-  const members = (membersRes.data ?? []) as MemberRow[];
-  const pattern = patternRes.data as PatternRow | null;
-  const exceptions = (exceptionsRes.data ?? []) as ExceptionRow[];
-  const swaps = (swapsRes.data ?? []) as SwapRow[];
-
-  if (!pattern) {
+  if (data.state === "no-pattern") {
     return (
       <EmptyState
         title="No active rotation"
@@ -91,24 +50,17 @@ export default async function DashboardPage() {
     );
   }
 
-  const PARENT_LABEL: Record<string, string> = Object.fromEntries(
-    members.map((mm) => [mm.id, mm.display_name])
-  );
-  const PARENT_COLOR: Record<string, string> = Object.fromEntries(
-    members.map((mm, i) => [mm.id, PARENT_COLOR_CLASS[i] ?? "bg-parentA"])
-  );
-  const labelFor = (id: string) => PARENT_LABEL[id] ?? "?";
-  const colorFor = (id: string) => PARENT_COLOR[id] ?? "bg-parentA";
+  const { supabase, familyId, meMemberId, members, inputs } = data;
+  const { labelFor, colorFor } = memberMaps(members);
+  const { swap: swapParam } = await searchParams;
 
-  const inputs: ScheduleInputs = {
-    pattern: { cycle: pattern.cycle, anchorDate: pattern.anchor_date },
-    exceptions: exceptions.map((e) => ({
-      id: e.id,
-      date: e.date,
-      parentId: e.parent_id,
-      reason: e.reason ?? undefined,
-    })),
-  };
+  const { data: swapsData } = await supabase
+    .from("swap_requests")
+    .select("id, requested_by, proposed_changes, created_at")
+    .eq("family_id", familyId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  const swaps = (swapsData ?? []) as SwapRow[];
 
   const TODAY = new Date().toISOString().slice(0, 10);
   const days = resolveRange(inputs, TODAY, 14);
@@ -116,8 +68,7 @@ export default async function DashboardPage() {
   const today = days[0];
   const nextExchange = exchanges[0];
 
-  // 30-day pick list for the swap form (reflects current effective schedule).
-  const swapOptions: DayOption[] = resolveRange(inputs, TODAY, 30).map((d) => ({
+  const swapOptions: DayOption[] = resolveRange(inputs, TODAY, 60).map((d) => ({
     date: d.date,
     label: fmt(d.date, { weekday: "short", month: "short", day: "numeric" }),
     currentParentId: d.parentId,
@@ -141,7 +92,10 @@ export default async function DashboardPage() {
   return (
     <main className="mx-auto max-w-md px-5 pt-8 pb-24">
       <div className="flex items-baseline justify-between mb-5">
-        <h1 className="font-display text-xl font-semibold">Keel</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="font-display text-xl font-semibold">Keel</h1>
+          <TopNav />
+        </div>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[11px] text-ink-faint">
             {fmt(TODAY, { weekday: "short", month: "short", day: "numeric" })}
@@ -239,6 +193,8 @@ export default async function DashboardPage() {
         <RequestSwapForm
           options={swapOptions}
           members={members.map((mm) => ({ id: mm.id, label: mm.display_name }))}
+          initialDate={swapParam}
+          initialOpen={Boolean(swapParam)}
         />
 
         {outgoing.length > 0 && (
@@ -320,7 +276,10 @@ function EmptyState({
   return (
     <main className="mx-auto max-w-md px-5 pt-8 pb-24">
       <div className="flex items-baseline justify-between mb-5">
-        <h1 className="font-display text-xl font-semibold">Keel</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="font-display text-xl font-semibold">Keel</h1>
+          <TopNav />
+        </div>
         {onSignout && (
           <form action={signout}>
             <button className="font-mono text-[10px] uppercase tracking-wider text-ink-faint hover:text-ink">

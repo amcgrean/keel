@@ -14,12 +14,20 @@ type Member = { id: string; label: string };
 export function RequestSwapForm({
   options,
   members,
+  initialDate,
+  initialOpen = false,
 }: {
   options: DayOption[];
   members: Member[];
+  initialDate?: string;
+  initialOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [date, setDate] = useState(options[0]?.date ?? "");
+  const validInitial =
+    initialDate && options.some((o) => o.date === initialDate)
+      ? initialDate
+      : options[0]?.date ?? "";
+  const [open, setOpen] = useState(initialOpen);
+  const [date, setDate] = useState(validInitial);
 
   const current = options.find((o) => o.date === date);
   const currentParentId = current?.currentParentId ?? "";
