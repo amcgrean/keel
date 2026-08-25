@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getMembership } from "@/lib/family";
 import {
   resolveRange,
   findExchanges,
@@ -7,32 +7,37 @@ import {
   type ParentId,
 } from "@/lib/schedule-engine";
 import { signout } from "./login/actions";
+import { respondToSwapRequest } from "./actions";
+import { RequestSwapForm, type DayOption } from "./request-swap-form";
 
 export const dynamic = "force-dynamic";
 
 type MemberRow = { id: string; display_name: string; color: string | null };
 type PatternRow = { id: string; label: string; cycle: ParentId[]; anchor_date: string };
 type ExceptionRow = { id: string; date: string; parent_id: string; reason: string | null };
+type ProposedChange = {
+  date: string;
+  from_parent_id: string | null;
+  to_parent_id: string;
+  note?: string;
+};
+type SwapRow = {
+  id: string;
+  requested_by: string;
+  proposed_changes: ProposedChange[];
+  created_at: string;
+};
 
 const PARENT_COLOR_CLASS = ["bg-parentA", "bg-parentB"] as const;
 
+function fmt(iso: string, opts: Intl.DateTimeFormatOptions) {
+  return new Date(iso + "T00:00:00Z").toLocaleDateString("en-US", opts);
+}
+
 export default async function DashboardPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  // Which family does this user belong to? (One family for now.)
-  const { data: membership } = await supabase
-    .from("family_members")
-    .select("family_id")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (!membership) {
+  const m = await getMembership();
+  if (!m) redirect("/login");
+  if (!m.member) {
     return (
       <EmptyState
         title="No family yet"
@@ -41,9 +46,11 @@ export default async function DashboardPage() {
     );
   }
 
-  const familyId = membership.family_id as string;
+  const { supabase } = m;
+  const familyId = m.member.family_id;
+  const meMemberId = m.member.id;
 
-  const [membersRes, patternRes, exceptionsRes] = await Promise.all([
+  const [membersRes, patternRes, exceptionsRes, swapsRes] = await Promise.all([
     supabase
       .from("family_members")
       .select("id, display_name, color")
@@ -61,11 +68,18 @@ export default async function DashboardPage() {
       .from("schedule_exceptions")
       .select("id, date, parent_id, reason")
       .eq("family_id", familyId),
+    supabase
+      .from("swap_requests")
+      .select("id, requested_by, proposed_changes, created_at")
+      .eq("family_id", familyId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false }),
   ]);
 
   const members = (membersRes.data ?? []) as MemberRow[];
   const pattern = patternRes.data as PatternRow | null;
   const exceptions = (exceptionsRes.data ?? []) as ExceptionRow[];
+  const swaps = (swapsRes.data ?? []) as SwapRow[];
 
   if (!pattern) {
     return (
@@ -77,12 +91,11 @@ export default async function DashboardPage() {
     );
   }
 
-  // Map family_member id → display label + calendar color slot.
   const PARENT_LABEL: Record<string, string> = Object.fromEntries(
-    members.map((m) => [m.id, m.display_name])
+    members.map((mm) => [mm.id, mm.display_name])
   );
   const PARENT_COLOR: Record<string, string> = Object.fromEntries(
-    members.map((m, i) => [m.id, PARENT_COLOR_CLASS[i] ?? "bg-parentA"])
+    members.map((mm, i) => [mm.id, PARENT_COLOR_CLASS[i] ?? "bg-parentA"])
   );
   const labelFor = (id: string) => PARENT_LABEL[id] ?? "?";
   const colorFor = (id: string) => PARENT_COLOR[id] ?? "bg-parentA";
@@ -103,17 +116,35 @@ export default async function DashboardPage() {
   const today = days[0];
   const nextExchange = exchanges[0];
 
+  // 30-day pick list for the swap form (reflects current effective schedule).
+  const swapOptions: DayOption[] = resolveRange(inputs, TODAY, 30).map((d) => ({
+    date: d.date,
+    label: fmt(d.date, { weekday: "short", month: "short", day: "numeric" }),
+    currentParentId: d.parentId,
+  }));
+
+  const incoming = swaps.filter((s) => s.requested_by !== meMemberId);
+  const outgoing = swaps.filter((s) => s.requested_by === meMemberId);
+
+  const describeChanges = (changes: ProposedChange[]) =>
+    changes
+      .map(
+        (c) =>
+          `${labelFor(c.to_parent_id)} takes Patrick ${fmt(c.date, {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+          })}`
+      )
+      .join("; ");
+
   return (
     <main className="mx-auto max-w-md px-5 pt-8 pb-24">
       <div className="flex items-baseline justify-between mb-5">
         <h1 className="font-display text-xl font-semibold">Keel</h1>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[11px] text-ink-faint">
-            {new Date(TODAY + "T00:00:00Z").toLocaleDateString("en-US", {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-            })}
+            {fmt(TODAY, { weekday: "short", month: "short", day: "numeric" })}
           </span>
           <form action={signout}>
             <button className="font-mono text-[10px] uppercase tracking-wider text-ink-faint hover:text-ink">
@@ -148,17 +179,81 @@ export default async function DashboardPage() {
                 Next exchange
               </div>
               <div className="font-mono text-sm font-medium">
-                {new Date(nextExchange.date + "T00:00:00Z").toLocaleDateString("en-US", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                })}{" "}
+                {fmt(nextExchange.date, { weekday: "short", month: "short", day: "numeric" })}{" "}
                 · 5:00 PM
               </div>
             </div>
             <div className="text-sm">
               {labelFor(nextExchange.from)} → {labelFor(nextExchange.to)}
             </div>
+          </div>
+        )}
+      </section>
+
+      {/* Incoming swap requests — need a response */}
+      {incoming.length > 0 && (
+        <section className="mb-6">
+          <h3 className="font-display text-base mb-2">Needs your response</h3>
+          <div className="flex flex-col gap-2">
+            {incoming.map((s) => (
+              <div
+                key={s.id}
+                className="rounded-card border border-beacon/40 bg-beacon-soft/30 p-3.5"
+              >
+                <div className="text-sm mb-1">
+                  <span className="font-semibold">{labelFor(s.requested_by)}</span>{" "}
+                  requested: {describeChanges(s.proposed_changes)}
+                </div>
+                {s.proposed_changes[0]?.note && (
+                  <div className="text-[11.5px] text-ink-soft mb-2">
+                    “{s.proposed_changes[0].note}”
+                  </div>
+                )}
+                <form className="flex gap-2 mt-2">
+                  <input type="hidden" name="request_id" value={s.id} />
+                  <button
+                    formAction={respondToSwapRequest}
+                    name="decision"
+                    value="accept"
+                    className="flex-1 rounded-sm bg-ink text-white font-display text-sm py-2 hover:opacity-90"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    formAction={respondToSwapRequest}
+                    name="decision"
+                    value="decline"
+                    className="flex-1 rounded-sm border border-line bg-card text-sm py-2 hover:border-ink-faint"
+                  >
+                    Decline
+                  </button>
+                </form>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Request a swap */}
+      <section className="mb-6">
+        <RequestSwapForm
+          options={swapOptions}
+          members={members.map((mm) => ({ id: mm.id, label: mm.display_name }))}
+        />
+
+        {outgoing.length > 0 && (
+          <div className="mt-2 flex flex-col gap-2">
+            {outgoing.map((s) => (
+              <div
+                key={s.id}
+                className="rounded-sm border border-line bg-paper px-3.5 py-2.5 text-[12.5px] text-ink-soft flex items-center justify-between gap-3"
+              >
+                <span>You requested: {describeChanges(s.proposed_changes)}</span>
+                <span className="font-mono text-[10px] uppercase tracking-wider text-beacon">
+                  pending
+                </span>
+              </div>
+            ))}
           </div>
         )}
       </section>
@@ -173,13 +268,16 @@ export default async function DashboardPage() {
               className={`flex-1 relative flex items-end justify-center pb-1 ${colorFor(d.parentId)} ${
                 d.source === "exception" ? "bg-stripes" : ""
               } ${i === 0 ? "ring-2 ring-inset ring-white" : ""}`}
-              title={`${d.date} — ${labelFor(d.parentId)}${d.source === "exception" ? " (schedule change)" : ""}`}
+              title={`${d.date} — ${labelFor(d.parentId)}${d.source === "exception" ? " (swapped)" : ""}`}
             >
               <span className="font-mono text-[10px] text-white/85">
                 {new Date(d.date + "T00:00:00Z").getUTCDate()}
               </span>
             </div>
           ))}
+        </div>
+        <div className="mt-1.5 font-mono text-[10px] text-ink-faint">
+          Striped days are swapped from the base rotation.
         </div>
       </section>
 
@@ -200,10 +298,7 @@ export default async function DashboardPage() {
                 <div className="text-[11.5px] text-ink-faint">5:00 PM</div>
               </div>
               <div className="font-mono text-[10px] bg-paper px-2 py-1 rounded">
-                {new Date(ex.date + "T00:00:00Z").toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })}
+                {fmt(ex.date, { month: "short", day: "numeric" })}
               </div>
             </div>
           ))}
