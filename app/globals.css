@@ -1,0 +1,21 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background: radial-gradient(1200px 600px at 15% -10%, #fbf9f3 0%, #f3f0e8 55%), #f3f0e8;
+  color: #22282b;
+}
+
+/* Marks a day that was changed via schedule_exception, on top of its
+   base-rotation parent color — mirrors the .exception treatment in the
+   design mockup's handoff strip. */
+.bg-stripes {
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.16) 0 6px,
+    transparent 6px 12px
+  );
+}
