@@ -7,12 +7,13 @@ const TABS = [
   { href: "/", label: "Today" },
   { href: "/calendar", label: "Calendar" },
   { href: "/reminders", label: "Reminders" },
+  { href: "/rules", label: "Rules" },
 ];
 
 export function TopNav() {
   const pathname = usePathname();
   return (
-    <nav className="flex gap-1 font-mono text-[11px] uppercase tracking-wider">
+    <nav className="flex flex-wrap gap-1 font-mono text-[11px] uppercase tracking-wider">
       {TABS.map((t) => {
         const active = pathname === t.href;
         return (

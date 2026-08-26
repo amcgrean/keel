@@ -42,7 +42,15 @@ export async function getScheduleData(): Promise<ScheduleData> {
   const familyId = m.member.family_id;
   const meMemberId = m.member.id;
 
-  const [membersRes, patternRes, exceptionsRes, remindersRes, eventsRes] = await Promise.all([
+  const [
+    membersRes,
+    patternRes,
+    exceptionsRes,
+    remindersRes,
+    eventsRes,
+    vacationsRes,
+    holidaysRes,
+  ] = await Promise.all([
     supabase
       .from("family_members")
       .select("id, display_name, color")
@@ -71,6 +79,14 @@ export async function getScheduleData(): Promise<ScheduleData> {
       .from("events")
       .select("id, title, category, starts_at, location, notes")
       .eq("family_id", familyId),
+    supabase
+      .from("vacations")
+      .select("id, parent_id, label, start_date, end_date")
+      .eq("family_id", familyId),
+    supabase
+      .from("holiday_rules")
+      .select("id, label, start_month_day, end_month_day, parent_even_years, parent_odd_years")
+      .eq("family_id", familyId),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
@@ -78,11 +94,39 @@ export async function getScheduleData(): Promise<ScheduleData> {
   const exceptions = (exceptionsRes.data ?? []) as Exception[];
   const reminders = (remindersRes.data ?? []) as ReminderRow[];
   const events = (eventsRes.data ?? []) as EventRow[];
+  const vacationRows = (vacationsRes.data ?? []) as {
+    id: string;
+    parent_id: string;
+    start_date: string;
+    end_date: string;
+  }[];
+  const holidayRows = (holidaysRes.data ?? []) as {
+    id: string;
+    label: string;
+    start_month_day: string;
+    end_month_day: string;
+    parent_even_years: string;
+    parent_odd_years: string;
+  }[];
 
   if (!pattern) return { state: "no-pattern", supabase, familyId, meMemberId, members };
 
   const inputs: ScheduleInputs = {
     pattern: { cycle: pattern.cycle, anchorDate: pattern.anchor_date },
+    holidays: holidayRows.map((h) => ({
+      id: h.id,
+      label: h.label,
+      parentOnEvenYears: h.parent_even_years,
+      parentOnOddYears: h.parent_odd_years,
+      startMonthDay: h.start_month_day,
+      endMonthDay: h.end_month_day,
+    })),
+    vacations: vacationRows.map((v) => ({
+      id: v.id,
+      parentId: v.parent_id,
+      startDate: v.start_date,
+      endDate: v.end_date,
+    })),
     exceptions: exceptions.map((e) => ({
       id: e.id,
       date: e.date,
