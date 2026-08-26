@@ -1,52 +1,57 @@
-# Keel native app (Capacitor)
+# Keel native app (Expo + EAS)
 
-Keel is server-rendered, so the native app is a thin **Capacitor shell that loads
-the deployed site** (`https://keel-phi-nine.vercel.app`) in a native WebView.
-All app logic stays on the web app we already ship. If you change the production
-URL, update `server.url` in `capacitor.config.ts`.
+Keel is server-rendered, so the native app is a thin **Expo WebView shell** that
+loads the deployed site (`https://keel-phi-nine.vercel.app`). All app logic stays
+on the web app. If the production URL changes, update `KEEL_URL` in
+`mobile/App.js`. The project lives in `mobile/` and builds with **EAS** — Expo's
+cloud build service, so **iOS builds run on Expo's macOS servers (no Mac needed
+on your Windows machine)**.
 
-The JS scaffolding (config, plugins) is done. The remaining steps add the native
-platform projects and build them — and **iOS can only be built on macOS**.
-
-## Android (buildable on Windows)
-
-1. Install **Android Studio** (includes the Android SDK + an emulator).
-2. From the repo root:
-   ```
-   npx cap add android
-   npx cap sync android
-   npx cap open android
-   ```
-3. In Android Studio, Run on an emulator or a USB device. To ship, build a
-   signed AAB/APK (Build → Generate Signed Bundle).
-
-## iOS (requires a Mac + Xcode)
-
-On a Mac with Xcode and CocoaPods installed, clone the repo and:
+## One-time setup
 ```
+cd mobile
 npm install
-npx cap add ios
-npx cap sync ios
-npx cap open ios
+npm install -g eas-cli        # or use `npx eas-cli@latest` in place of `eas`
+eas login                     # your Expo account
 ```
-Then in Xcode: set your Team (Apple Developer account), pick a device/simulator,
-and Run. Distribute via TestFlight/App Store from Xcode → Product → Archive.
+If npm complains about versions: `npx expo install --fix`.
 
-### No Mac? Cloud build options
-- **Codemagic** or **Ionic Appflow** — connect this GitHub repo, they build the
-  iOS app on hosted macOS and can push to TestFlight. Needs an Apple Developer
-  account ($99/yr) for signing.
-- **GitHub Actions** with a `macos-latest` runner running the `npx cap add ios`
-  + `xcodebuild` steps.
+Quick local sanity check (optional, needs the Expo Go app on your phone):
+```
+npx expo start                # scan the QR with Expo Go
+```
 
-## After the first `cap add`
-Commit the generated `ios/` and/or `android/` folders (build artifacts are
-gitignored). On later web changes you usually **don't** need to rebuild the
-native app — it loads the live URL — unless you change native config/plugins,
-then `npx cap sync`.
+## iOS (via EAS cloud — works from Windows)
+Requires an **Apple Developer account** ($99/yr) to install on real iPhones.
+
+Register your two iPhones for a direct-install (ad-hoc) build:
+```
+eas device:create             # follow the link on each phone to register it
+eas build --platform ios --profile preview
+```
+EAS will offer to create the signing credentials for you (log in with your Apple
+account when prompted). When the build finishes it gives a QR/link — open it on a
+registered iPhone to install.
+
+Prefer TestFlight instead of ad-hoc?
+```
+eas build --platform ios --profile production
+eas submit --platform ios --latest
+```
+
+## Android (also cloud, or local)
+```
+eas build --platform android --profile preview
+```
+Gives an installable **.apk** link — open it on the phone and install. No
+developer account needed for a direct APK.
+
+## Updating
+Because the app loads the live URL, **web changes need no rebuild** — they show
+up on next launch. Rebuild the native app only when you change `mobile/`
+(the shell, icons, native config, or add native plugins).
 
 ## Native push (later)
-Web push works in the installed PWA but not inside the iOS WebView. For native
-notifications, add `@capacitor/push-notifications`, register for APNs/FCM, store
-the native token, and send via APNs/FCM instead of (or alongside) web-push.
-This needs an Apple Developer account and some server changes — deferred.
+Web push works in the installed PWA but not inside a WebView. For native
+notifications, add `expo-notifications`, register for a push token, store it, and
+send via Expo's push service — a follow-up once the shell is in the stores.
