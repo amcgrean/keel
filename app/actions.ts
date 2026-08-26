@@ -1,7 +1,22 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getMembership } from "@/lib/family";
+import { getMembership, type Membership } from "@/lib/family";
+import { sendEmail } from "@/lib/email";
+
+type FamRow = { id: string; display_name: string; email: string | null };
+
+/** Family members with contact email; [] if the email column isn't there yet. */
+async function familyRoster(
+  supabase: Membership["supabase"],
+  familyId: string
+): Promise<FamRow[]> {
+  const { data } = await supabase
+    .from("family_members")
+    .select("id, display_name, email")
+    .eq("family_id", familyId);
+  return (data ?? []) as FamRow[];
+}
 
 type ProposedChange = {
   date: string;
@@ -38,6 +53,28 @@ export async function createSwapRequest(formData: FormData) {
     status: "pending",
     proposed_changes: [change],
   });
+
+  // Notify the other parent(s).
+  const me = m.member;
+  const roster = await familyRoster(m.supabase, me.family_id);
+  const meName = roster.find((r) => r.id === me.id)?.display_name ?? "A parent";
+  const whenLabel = new Date(date + "T00:00:00Z").toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+  await Promise.all(
+    roster
+      .filter((r) => r.id !== me.id)
+      .map((r) =>
+        sendEmail(
+          r.email,
+          "New swap request in Keel",
+          `${meName} requested a swap for ${whenLabel}. Open Keel to accept or decline.`
+        )
+      )
+  );
 
   revalidatePath("/");
 }
@@ -109,6 +146,19 @@ export async function respondToSwapRequest(formData: FormData) {
       p_old_value: null,
       p_new_value: req.proposed_changes,
     });
+  }
+
+  // Notify the requester of the outcome.
+  const me = m.member;
+  const roster = await familyRoster(m.supabase, req.family_id);
+  const requester = roster.find((r) => r.id === req.requested_by);
+  const meName = roster.find((r) => r.id === me.id)?.display_name ?? "The other parent";
+  if (requester && requester.id !== me.id) {
+    await sendEmail(
+      requester.email,
+      `Swap ${decision === "accept" ? "accepted" : "declined"}`,
+      `${meName} ${decision === "accept" ? "accepted" : "declined"} your swap request.`
+    );
   }
 
   revalidatePath("/");
