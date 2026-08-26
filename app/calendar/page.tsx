@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getScheduleData, memberMaps } from "@/lib/schedule-data";
 import { resolveRange } from "@/lib/schedule-engine";
 import { remindersOn } from "@/lib/reminders";
+import { eventsOn } from "@/lib/events";
 import { signout } from "../login/actions";
 import { TopNav } from "../top-nav";
 
@@ -80,7 +81,7 @@ export default async function CalendarPage({
     );
   }
 
-  const { members, inputs, reminders } = data;
+  const { members, inputs, reminders, events } = data;
   const { labelFor, colorFor } = memberMaps(members);
 
   // Build the visible grid: pad from the first weekday, fill whole weeks.
@@ -98,7 +99,8 @@ export default async function CalendarPage({
     inMonth: Number(d.date.slice(5, 7)) === monthIndex0 + 1,
     day: Number(d.date.slice(8, 10)),
     isToday: d.date === todayIso,
-    hasReminder: remindersOn(reminders, d.date).length > 0,
+    hasMarker:
+      remindersOn(reminders, d.date).length > 0 || eventsOn(events, d.date).length > 0,
   }));
 
   return (
@@ -138,15 +140,15 @@ export default async function CalendarPage({
         {cells.map((c) => (
           <Link
             key={c.date}
-            href={`/?swap=${c.date}`}
-            title={`${c.date} — ${labelFor(c.parentId)}${c.source === "exception" ? " (swapped)" : ""}${c.hasReminder ? " · has reminder" : ""}`}
+            href={`/day/${c.date}`}
+            title={`${c.date} — ${labelFor(c.parentId)}${c.source === "exception" ? " (swapped)" : ""}${c.hasMarker ? " · has reminders/events" : ""}`}
             className={`relative aspect-square rounded-sm flex flex-col items-center justify-center text-white ${colorFor(
               c.parentId
             )} ${c.source === "exception" ? "bg-stripes" : ""} ${
               c.inMonth ? "" : "opacity-35"
             } ${c.isToday ? "ring-2 ring-inset ring-white" : ""}`}
           >
-            {c.hasReminder && (
+            {c.hasMarker && (
               <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-white" />
             )}
             <span className="font-mono text-[11px] leading-none">{c.day}</span>
@@ -172,7 +174,8 @@ export default async function CalendarPage({
       </div>
 
       <p className="font-mono text-[10px] text-ink-faint mt-4">
-        Tap any day to request a swap for it.
+        Tap any day to see details, add events, or request a swap. A dot marks
+        days with reminders or events.
       </p>
     </main>
   );

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getScheduleData, memberMaps } from "@/lib/schedule-data";
 import { resolveRange, findExchanges } from "@/lib/schedule-engine";
@@ -6,6 +7,7 @@ import { respondToSwapRequest } from "./actions";
 import { RequestSwapForm, type DayOption } from "./request-swap-form";
 import { TopNav } from "./top-nav";
 import { remindersOn, kindEmoji, formatTime } from "@/lib/reminders";
+import { eventsOn, categoryEmoji, eventTime } from "@/lib/events";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +53,7 @@ export default async function DashboardPage({
     );
   }
 
-  const { supabase, familyId, meMemberId, members, inputs, reminders } = data;
+  const { supabase, familyId, meMemberId, members, inputs, reminders, events } = data;
   const { labelFor, colorFor } = memberMaps(members);
   const { swap: swapParam } = await searchParams;
 
@@ -69,12 +71,26 @@ export default async function DashboardPage({
   const today = days[0];
   const nextExchange = exchanges[0];
 
-  // Reminders over the next 7 days, only days that actually have something.
-  const reminderDays = Array.from({ length: 7 }, (_, i) => {
+  // Reminders + events over the next 7 days, only days that have something.
+  const upcomingDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(TODAY + "T00:00:00Z");
     d.setUTCDate(d.getUTCDate() + i);
     const iso = d.toISOString().slice(0, 10);
-    return { iso, i, items: remindersOn(reminders, iso) };
+    const items = [
+      ...remindersOn(reminders, iso).map((r) => ({
+        key: `r-${r.id}`,
+        emoji: kindEmoji(r.kind),
+        title: r.title,
+        time: r.time_of_day ? formatTime(r.time_of_day) : "",
+      })),
+      ...eventsOn(events, iso).map((e) => ({
+        key: `e-${e.id}`,
+        emoji: categoryEmoji(e.category),
+        title: e.title,
+        time: eventTime(e),
+      })),
+    ];
+    return { iso, i, items };
   }).filter((x) => x.items.length > 0);
 
   const swapOptions: DayOption[] = resolveRange(inputs, TODAY, 60).map((d) => ({
@@ -153,15 +169,16 @@ export default async function DashboardPage({
         )}
       </section>
 
-      {/* Reminders — next 7 days */}
-      {reminderDays.length > 0 && (
+      {/* Reminders + events — next 7 days */}
+      {upcomingDays.length > 0 && (
         <section className="mb-6">
           <h3 className="font-display text-base mb-2">Coming up</h3>
           <div className="flex flex-col gap-2">
-            {reminderDays.map((rd) => (
-              <div
+            {upcomingDays.map((rd) => (
+              <Link
                 key={rd.iso}
-                className="rounded-sm border border-line bg-card px-3.5 py-2.5"
+                href={`/day/${rd.iso}`}
+                className="block rounded-sm border border-line bg-card px-3.5 py-2.5 hover:border-ink-faint"
               >
                 <div className="font-mono text-[10px] uppercase tracking-wider text-ink-faint mb-1.5">
                   {rd.i === 0
@@ -171,19 +188,19 @@ export default async function DashboardPage({
                       : fmt(rd.iso, { weekday: "long", month: "short", day: "numeric" })}
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  {rd.items.map((r) => (
-                    <div key={r.id} className="flex items-center gap-2 text-sm">
-                      <span className="leading-none">{kindEmoji(r.kind)}</span>
-                      <span className="font-medium">{r.title}</span>
-                      {r.time_of_day && (
+                  {rd.items.map((it) => (
+                    <div key={it.key} className="flex items-center gap-2 text-sm">
+                      <span className="leading-none">{it.emoji}</span>
+                      <span className="font-medium">{it.title}</span>
+                      {it.time && (
                         <span className="text-ink-faint text-[12px] font-mono">
-                          {formatTime(r.time_of_day)}
+                          {it.time}
                         </span>
                       )}
                     </div>
                   ))}
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </section>

@@ -1,6 +1,7 @@
 import { getMembership } from "@/lib/family";
 import type { ScheduleInputs, ParentId } from "@/lib/schedule-engine";
 import type { ReminderRow } from "@/lib/reminders";
+import type { EventRow } from "@/lib/events";
 import { createClient } from "@/lib/supabase/server";
 
 export type Member = { id: string; display_name: string; color: string | null };
@@ -22,6 +23,7 @@ export type ScheduleData =
       pattern: Pattern;
       exceptions: Exception[];
       reminders: ReminderRow[];
+      events: EventRow[];
       inputs: ScheduleInputs;
     };
 
@@ -40,7 +42,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
   const familyId = m.member.family_id;
   const meMemberId = m.member.id;
 
-  const [membersRes, patternRes, exceptionsRes, remindersRes] = await Promise.all([
+  const [membersRes, patternRes, exceptionsRes, remindersRes, eventsRes] = await Promise.all([
     supabase
       .from("family_members")
       .select("id, display_name, color")
@@ -65,12 +67,17 @@ export async function getScheduleData(): Promise<ScheduleData> {
       .select("id, title, notes, kind, time_of_day, recurrence, weekdays, on_date")
       .eq("family_id", familyId)
       .eq("active", true),
+    supabase
+      .from("events")
+      .select("id, title, category, starts_at, location, notes")
+      .eq("family_id", familyId),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
   const pattern = patternRes.data as Pattern | null;
   const exceptions = (exceptionsRes.data ?? []) as Exception[];
   const reminders = (remindersRes.data ?? []) as ReminderRow[];
+  const events = (eventsRes.data ?? []) as EventRow[];
 
   if (!pattern) return { state: "no-pattern", supabase, familyId, meMemberId, members };
 
@@ -93,6 +100,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     pattern,
     exceptions,
     reminders,
+    events,
     inputs,
   };
 }
