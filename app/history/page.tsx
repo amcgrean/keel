@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getMembership } from "@/lib/family";
 import { memberMaps, type Member } from "@/lib/schedule-data";
 import { signout } from "../login/actions";
-import { TopNav } from "../top-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +32,7 @@ export default async function HistoryPage() {
 
   const header = (
     <div className="flex items-baseline justify-between mb-5">
-      <div className="flex items-center gap-3">
-        <h1 className="font-display text-xl font-semibold">Keel</h1>
-        <TopNav />
-      </div>
+      <h1 className="font-display text-xl font-semibold">Keel</h1>
       <form action={signout}>
         <button className="font-mono text-[10px] uppercase tracking-wider text-ink-faint hover:text-ink">
           Sign out

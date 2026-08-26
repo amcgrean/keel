@@ -5,7 +5,6 @@ import { resolveRange, findExchanges } from "@/lib/schedule-engine";
 import { signout } from "./login/actions";
 import { respondToSwapRequest } from "./actions";
 import { RequestSwapForm, type DayOption } from "./request-swap-form";
-import { TopNav } from "./top-nav";
 import { EnableNotifications } from "./enable-notifications";
 import { remindersOn, kindEmoji, formatTime } from "@/lib/reminders";
 import { eventsOn, categoryEmoji, eventTime } from "@/lib/events";
@@ -136,10 +135,7 @@ export default async function DashboardPage({
   return (
     <main className="mx-auto max-w-md px-5 pt-8 pb-24">
       <div className="flex items-baseline justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <h1 className="font-display text-xl font-semibold">Keel</h1>
-          <TopNav />
-        </div>
+        <h1 className="font-display text-xl font-semibold">Keel</h1>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[11px] text-ink-faint">
             {fmt(TODAY, { weekday: "short", month: "short", day: "numeric" })}
@@ -397,10 +393,7 @@ function EmptyState({
   return (
     <main className="mx-auto max-w-md px-5 pt-8 pb-24">
       <div className="flex items-baseline justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <h1 className="font-display text-xl font-semibold">Keel</h1>
-          <TopNav />
-        </div>
+        <h1 className="font-display text-xl font-semibold">Keel</h1>
         {onSignout && (
           <form action={signout}>
             <button className="font-mono text-[10px] uppercase tracking-wider text-ink-faint hover:text-ink">

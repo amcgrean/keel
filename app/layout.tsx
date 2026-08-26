@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { RegisterServiceWorker } from "./register-sw";
+import { BottomNav } from "./bottom-nav";
 
 export const metadata: Metadata = {
   title: "Keel — Co-Parenting Calendar",
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="font-body">
         {children}
+        <BottomNav />
         <RegisterServiceWorker />
       </body>
     </html>

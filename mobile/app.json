@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#22282B"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.keel.coparent"
@@ -26,6 +28,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "751e06fb-9387-487a-8ab4-7166973f0e8a"
+      }
     }
   }
 }

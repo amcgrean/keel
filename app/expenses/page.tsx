@@ -8,7 +8,6 @@ import {
   type ExpenseRow,
 } from "@/lib/expenses";
 import { signout } from "../login/actions";
-import { TopNav } from "../top-nav";
 import { ExpenseForm } from "./expense-form";
 import { respondToExpense, settleExpense, deleteExpense } from "./actions";
 
@@ -27,10 +26,7 @@ export default async function ExpensesPage() {
 
   const header = (
     <div className="flex items-baseline justify-between mb-5">
-      <div className="flex items-center gap-3">
-        <h1 className="font-display text-xl font-semibold">Keel</h1>
-        <TopNav />
-      </div>
+      <h1 className="font-display text-xl font-semibold">Keel</h1>
       <form action={signout}>
         <button className="font-mono text-[10px] uppercase tracking-wider text-ink-faint hover:text-ink">
           Sign out
