@@ -24,6 +24,7 @@ export type ScheduleData =
       exceptions: Exception[];
       reminders: ReminderRow[];
       events: EventRow[];
+      exchangeTime: string;
       inputs: ScheduleInputs;
     };
 
@@ -50,6 +51,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     eventsRes,
     vacationsRes,
     holidaysRes,
+    familyRes,
   ] = await Promise.all([
     supabase
       .from("family_members")
@@ -87,6 +89,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       .from("holiday_rules")
       .select("id, label, start_month_day, end_month_day, parent_even_years, parent_odd_years")
       .eq("family_id", familyId),
+    supabase.from("families").select("exchange_time").eq("id", familyId).maybeSingle(),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
@@ -145,6 +148,9 @@ export async function getScheduleData(): Promise<ScheduleData> {
     exceptions,
     reminders,
     events,
+    exchangeTime:
+      ((familyRes.data as { exchange_time?: string } | null)?.exchange_time as string) ??
+      "17:00",
     inputs,
   };
 }

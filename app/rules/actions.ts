@@ -9,6 +9,18 @@ function revalidateAll() {
   revalidatePath("/calendar");
 }
 
+export async function updateExchangeTime(formData: FormData) {
+  const m = await getMembership();
+  if (!m?.member) return;
+  const t = String(formData.get("exchange_time") ?? "");
+  if (!/^\d{2}:\d{2}$/.test(t)) return;
+  await m.supabase
+    .from("families")
+    .update({ exchange_time: t })
+    .eq("id", m.member.family_id);
+  revalidateAll();
+}
+
 export async function createVacation(formData: FormData) {
   const m = await getMembership();
   if (!m?.member) return;

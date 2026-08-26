@@ -4,6 +4,7 @@ import { memberMaps, type Member } from "@/lib/schedule-data";
 import { signout } from "../login/actions";
 import { TopNav } from "../top-nav";
 import {
+  updateExchangeTime,
   createVacation,
   deleteVacation,
   createHoliday,
@@ -78,7 +79,7 @@ export default async function RulesPage() {
   }
 
   const familyId = m.member.family_id;
-  const [membersRes, vacationsRes, holidaysRes] = await Promise.all([
+  const [membersRes, vacationsRes, holidaysRes, familyRes] = await Promise.all([
     m.supabase
       .from("family_members")
       .select("id, display_name, color")
@@ -94,11 +95,15 @@ export default async function RulesPage() {
       .select("id, label, start_month_day, end_month_day, parent_even_years, parent_odd_years")
       .eq("family_id", familyId)
       .order("start_month_day", { ascending: true }),
+    m.supabase.from("families").select("exchange_time").eq("id", familyId).maybeSingle(),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
   const vacations = (vacationsRes.data ?? []) as VacationRow[];
   const holidays = (holidaysRes.data ?? []) as HolidayRow[];
+  const exchangeTime = (
+    (familyRes.data as { exchange_time?: string } | null)?.exchange_time ?? "17:00"
+  ).slice(0, 5);
   const { labelFor } = memberMaps(members);
 
   const parentOptions = members.map((mm) => (
@@ -110,6 +115,31 @@ export default async function RulesPage() {
   return (
     <main className="mx-auto max-w-md px-5 pt-8 pb-24">
       {header}
+
+      {/* Exchange time */}
+      <section className="mb-8">
+        <h2 className="font-display text-lg mb-3">Exchange time</h2>
+        <form
+          action={updateExchangeTime}
+          className="rounded-card border border-line bg-card shadow-sm p-4 flex items-end gap-3"
+        >
+          <label className="flex flex-col gap-1 flex-1">
+            <span className={labelCls}>Handoff time</span>
+            <input
+              type="time"
+              name="exchange_time"
+              defaultValue={exchangeTime}
+              className={inputCls}
+            />
+          </label>
+          <button
+            type="submit"
+            className="rounded-sm bg-ink text-white font-display text-sm px-4 py-2 hover:opacity-90"
+          >
+            Save
+          </button>
+        </form>
+      </section>
 
       {/* Vacations */}
       <section className="mb-8">

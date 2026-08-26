@@ -54,8 +54,10 @@ export default async function DashboardPage({
     );
   }
 
-  const { supabase, familyId, meMemberId, members, inputs, reminders, events } = data;
-  const { labelFor, dayClass } = memberMaps(members);
+  const { supabase, familyId, meMemberId, members, inputs, reminders, events, exchangeTime } =
+    data;
+  const { labelFor, dayClass, colorFor } = memberMaps(members);
+  const exchangeLabel = formatTime(exchangeTime);
   const { swap: swapParam } = await searchParams;
 
   const { data: swapsData } = await supabase
@@ -93,6 +95,22 @@ export default async function DashboardPage({
     ];
     return { iso, i, items };
   }).filter((x) => x.items.length > 0);
+
+  // Parenting-time this calendar month (nights per parent).
+  const monthNow = new Date();
+  const my = monthNow.getUTCFullYear();
+  const mm = monthNow.getUTCMonth();
+  const monthFirst = `${my}-${String(mm + 1).padStart(2, "0")}-01`;
+  const monthLen = new Date(Date.UTC(my, mm + 1, 0)).getUTCDate();
+  const nights: Record<string, number> = {};
+  resolveRange(inputs, monthFirst, monthLen).forEach((d) => {
+    nights[d.parentId] = (nights[d.parentId] ?? 0) + 1;
+  });
+  const monthName = new Date(Date.UTC(my, mm, 1)).toLocaleDateString("en-US", {
+    month: "long",
+    timeZone: "UTC",
+  });
+  const myNights = nights[meMemberId] ?? 0;
 
   const swapOptions: DayOption[] = resolveRange(inputs, TODAY, 60).map((d) => ({
     date: d.date,
@@ -162,7 +180,7 @@ export default async function DashboardPage({
               </div>
               <div className="font-mono text-sm font-medium">
                 {fmt(nextExchange.date, { weekday: "short", month: "short", day: "numeric" })}{" "}
-                · 5:00 PM
+                · {exchangeLabel}
               </div>
             </div>
             <div className="text-sm">
@@ -170,6 +188,44 @@ export default async function DashboardPage({
             </div>
           </div>
         )}
+      </section>
+
+      {/* Parenting time this month */}
+      <section className="rounded-card border border-line bg-card shadow-sm p-5 mb-6">
+        <div className="font-mono text-[10.5px] uppercase tracking-wider text-ink-faint mb-1">
+          Your time with Patrick
+        </div>
+        <div className="font-display text-xl mb-3">
+          {myNights} {myNights === 1 ? "night" : "nights"} in {monthName}
+        </div>
+        <div className="flex h-3 rounded-full overflow-hidden mb-2">
+          {members.map((mm2) => {
+            const n = nights[mm2.id] ?? 0;
+            const pct = monthLen ? Math.round((n / monthLen) * 100) : 0;
+            return (
+              <div
+                key={mm2.id}
+                className={colorFor(mm2.id)}
+                style={{ width: `${pct}%` }}
+                title={`${mm2.display_name}: ${n} nights`}
+              />
+            );
+          })}
+        </div>
+        <div className="flex gap-4">
+          {members.map((mm2) => {
+            const n = nights[mm2.id] ?? 0;
+            const pct = monthLen ? Math.round((n / monthLen) * 100) : 0;
+            return (
+              <div key={mm2.id} className="flex items-center gap-1.5">
+                <span className={`h-2.5 w-2.5 rounded-sm ${colorFor(mm2.id)}`} />
+                <span className="text-[12px] text-ink-soft">
+                  {mm2.display_name} {n} ({pct}%)
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       {/* Reminders + events — next 7 days */}
@@ -316,7 +372,7 @@ export default async function DashboardPage({
                 <div className="text-sm font-semibold">
                   Exchange · {labelFor(ex.from)} → {labelFor(ex.to)}
                 </div>
-                <div className="text-[11.5px] text-ink-faint">5:00 PM</div>
+                <div className="text-[11.5px] text-ink-faint">{exchangeLabel}</div>
               </div>
               <div className="font-mono text-[10px] bg-paper px-2 py-1 rounded">
                 {fmt(ex.date, { month: "short", day: "numeric" })}
