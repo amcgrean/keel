@@ -15,7 +15,8 @@ export default {
         line: "#E3DFD2",
 
         parentA: { DEFAULT: "#45607A", soft: "#DCE4EA", tint: "#EEF2F5" },
-        parentB: { DEFAULT: "#7C8F5A", soft: "#E4E9DA", tint: "#F2F4EC" },
+        parentB: { DEFAULT: "#C56A93", soft: "#EED8E3", tint: "#F6ECF1" },
+        lavender: { DEFAULT: "#9384C7", soft: "#E7E2F3" },
         beacon: { DEFAULT: "#B8871F", soft: "#F1E4BC" },
         danger: "#B65A45",
       },

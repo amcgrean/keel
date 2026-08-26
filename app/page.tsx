@@ -55,7 +55,7 @@ export default async function DashboardPage({
   }
 
   const { supabase, familyId, meMemberId, members, inputs, reminders, events } = data;
-  const { labelFor, colorFor } = memberMaps(members);
+  const { labelFor, dayClass } = memberMaps(members);
   const { swap: swapParam } = await searchParams;
 
   const { data: swapsData } = await supabase
@@ -143,7 +143,7 @@ export default async function DashboardPage({
         </div>
         <div className="flex items-center gap-3 mb-4">
           <div
-            className={`h-11 w-11 rounded-full flex items-center justify-center text-white font-display text-lg ${colorFor(today.parentId)}`}
+            className={`h-11 w-11 rounded-full flex items-center justify-center text-white font-display text-lg ${dayClass(today.parentId, today.source)}`}
           >
             {labelFor(today.parentId)[0]}
           </div>
@@ -286,9 +286,9 @@ export default async function DashboardPage({
           {days.map((d, i) => (
             <div
               key={d.date}
-              className={`flex-1 relative flex items-end justify-center pb-1 ${colorFor(d.parentId)} ${
-                d.source === "exception" ? "bg-stripes" : ""
-              } ${i === 0 ? "ring-2 ring-inset ring-white" : ""}`}
+              className={`flex-1 relative flex items-end justify-center pb-1 ${dayClass(d.parentId, d.source)} ${
+                i === 0 ? "ring-2 ring-inset ring-white" : ""
+              }`}
               title={`${d.date} — ${labelFor(d.parentId)}${d.source === "exception" ? " (swapped)" : ""}`}
             >
               <span className="font-mono text-[10px] text-white/85">
@@ -298,7 +298,7 @@ export default async function DashboardPage({
           ))}
         </div>
         <div className="mt-1.5 font-mono text-[10px] text-ink-faint">
-          Striped days are swapped from the base rotation.
+          Lavender days are swapped from the base rotation.
         </div>
       </section>
 

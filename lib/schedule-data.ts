@@ -158,8 +158,13 @@ export function memberMaps(members: Member[]) {
   const color: Record<string, string> = Object.fromEntries(
     members.map((m, i) => [m.id, COLOR[i] ?? "bg-parentA"])
   );
+  const colorFor = (id: string) => color[id] ?? "bg-parentA";
   return {
     labelFor: (id: string) => label[id] ?? "?",
-    colorFor: (id: string) => color[id] ?? "bg-parentA",
+    colorFor,
+    // Swapped days render lavender (distinct from either parent's colour);
+    // everything else uses the parent's own colour.
+    dayClass: (id: string, source: string) =>
+      source === "exception" ? "bg-lavender" : colorFor(id),
   };
 }

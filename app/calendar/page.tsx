@@ -82,7 +82,7 @@ export default async function CalendarPage({
   }
 
   const { members, inputs, reminders, events } = data;
-  const { labelFor, colorFor } = memberMaps(members);
+  const { labelFor, colorFor, dayClass } = memberMaps(members);
 
   // Build the visible grid: pad from the first weekday, fill whole weeks.
   const firstOfMonth = new Date(Date.UTC(year, monthIndex0, 1));
@@ -142,11 +142,12 @@ export default async function CalendarPage({
             key={c.date}
             href={`/day/${c.date}`}
             title={`${c.date} — ${labelFor(c.parentId)}${c.source === "exception" ? " (swapped)" : ""}${c.hasMarker ? " · has reminders/events" : ""}`}
-            className={`relative aspect-square rounded-sm flex flex-col items-center justify-center text-white ${colorFor(
-              c.parentId
-            )} ${c.source === "exception" ? "bg-stripes" : ""} ${
-              c.inMonth ? "" : "opacity-35"
-            } ${c.isToday ? "ring-2 ring-inset ring-white" : ""}`}
+            className={`relative aspect-square rounded-sm flex flex-col items-center justify-center text-white ${dayClass(
+              c.parentId,
+              c.source
+            )} ${c.inMonth ? "" : "opacity-35"} ${
+              c.isToday ? "ring-2 ring-inset ring-white" : ""
+            }`}
           >
             {c.hasMarker && (
               <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-white" />
@@ -168,7 +169,7 @@ export default async function CalendarPage({
           </div>
         ))}
         <div className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-sm bg-stripes bg-parentA" />
+          <span className="h-3 w-3 rounded-sm bg-lavender" />
           <span className="text-[12px] text-ink-soft">swapped</span>
         </div>
       </div>

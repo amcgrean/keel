@@ -61,7 +61,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   }
 
   const { members, inputs, reminders, events } = data;
-  const { labelFor, colorFor } = memberMaps(members);
+  const { labelFor, dayClass } = memberMaps(members);
 
   const resolved = resolveDay(inputs, date);
   const dayReminders = remindersOn(reminders, date);
@@ -92,7 +92,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
       <section className="rounded-card border border-line bg-card shadow-sm p-5 mb-6">
         <div className="flex items-center gap-3">
           <div
-            className={`h-11 w-11 rounded-full flex items-center justify-center text-white font-display text-lg ${colorFor(resolved.parentId)}`}
+            className={`h-11 w-11 rounded-full flex items-center justify-center text-white font-display text-lg ${dayClass(resolved.parentId, resolved.source)}`}
           >
             {labelFor(resolved.parentId)[0]}
           </div>
