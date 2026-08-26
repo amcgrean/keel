@@ -13,3 +13,14 @@ next-env.d.ts
 .claude/settings.local.json
 
 .vercel
+
+# Capacitor native build artifacts (the ios/ and android/ project folders
+# themselves are committed from the build machine; these are generated output)
+/ios/App/Pods
+/ios/App/App/public
+/ios/App/build
+/ios/DerivedData
+/android/.gradle
+/android/build
+/android/app/build
+/android/capacitor-cordova-android-plugins
