@@ -4,7 +4,6 @@ import { getScheduleData, memberMaps } from "@/lib/schedule-data";
 import { resolveDay } from "@/lib/schedule-engine";
 import { remindersOn, kindEmoji, formatTime, describeReminder } from "@/lib/reminders";
 import { eventsOn, categoryEmoji, eventTime, CATEGORY_META } from "@/lib/events";
-import { signout } from "../../login/actions";
 import { EventForm } from "./event-form";
 import { deleteEvent } from "../actions";
 
@@ -28,11 +27,6 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   const header = (
     <div className="flex items-baseline justify-between mb-5">
       <h1 className="font-display text-xl font-semibold">Keel</h1>
-      <form action={signout}>
-        <button className="font-mono text-[10px] uppercase tracking-wider text-ink-faint hover:text-ink">
-          Sign out
-        </button>
-      </form>
     </div>
   );
 

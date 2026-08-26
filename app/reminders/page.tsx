@@ -5,7 +5,6 @@ import {
   kindEmoji,
   type ReminderRow,
 } from "@/lib/reminders";
-import { signout } from "../login/actions";
 import { ReminderForm } from "./reminder-form";
 import { deleteReminder } from "./actions";
 
@@ -18,11 +17,6 @@ export default async function RemindersPage() {
   const header = (
     <div className="flex items-baseline justify-between mb-5">
       <h1 className="font-display text-xl font-semibold">Keel</h1>
-      <form action={signout}>
-        <button className="font-mono text-[10px] uppercase tracking-wider text-ink-faint hover:text-ink">
-          Sign out
-        </button>
-      </form>
     </div>
   );
 

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 export type Membership = {
   supabase: Awaited<ReturnType<typeof createClient>>;
   userId: string;
+  email: string | null;
   member: { id: string; family_id: string } | null;
 };
 
@@ -29,6 +30,7 @@ export async function getMembership(): Promise<Membership | null> {
   return {
     supabase,
     userId: user.id,
+    email: user.email ?? null,
     member: (member as { id: string; family_id: string } | null) ?? null,
   };
 }

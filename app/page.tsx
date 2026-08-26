@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getScheduleData, memberMaps } from "@/lib/schedule-data";
 import { resolveRange, findExchanges } from "@/lib/schedule-engine";
-import { signout } from "./login/actions";
 import { respondToSwapRequest } from "./actions";
 import { RequestSwapForm, type DayOption } from "./request-swap-form";
 import { EnableNotifications } from "./enable-notifications";
@@ -48,7 +47,6 @@ export default async function DashboardPage({
       <EmptyState
         title="No active rotation"
         body="This family has no active schedule pattern yet. Create one (e.g. 2-2-3 with an anchor date), then reload."
-        onSignout
       />
     );
   }
@@ -140,11 +138,6 @@ export default async function DashboardPage({
           <span className="font-mono text-[11px] text-ink-faint">
             {fmt(TODAY, { weekday: "short", month: "short", day: "numeric" })}
           </span>
-          <form action={signout}>
-            <button className="font-mono text-[10px] uppercase tracking-wider text-ink-faint hover:text-ink">
-              Sign out
-            </button>
-          </form>
         </div>
       </div>
 
@@ -384,23 +377,14 @@ export default async function DashboardPage({
 function EmptyState({
   title,
   body,
-  onSignout = false,
 }: {
   title: string;
   body: string;
-  onSignout?: boolean;
 }) {
   return (
     <main className="mx-auto max-w-md px-5 pt-8 pb-24">
       <div className="flex items-baseline justify-between mb-5">
         <h1 className="font-display text-xl font-semibold">Keel</h1>
-        {onSignout && (
-          <form action={signout}>
-            <button className="font-mono text-[10px] uppercase tracking-wider text-ink-faint hover:text-ink">
-              Sign out
-            </button>
-          </form>
-        )}
       </div>
       <section className="rounded-card border border-line bg-card shadow-sm p-6">
         <h2 className="font-display text-lg mb-1">{title}</h2>
