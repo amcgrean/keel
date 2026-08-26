@@ -6,6 +6,7 @@ import { signout } from "./login/actions";
 import { respondToSwapRequest } from "./actions";
 import { RequestSwapForm, type DayOption } from "./request-swap-form";
 import { TopNav } from "./top-nav";
+import { EnableNotifications } from "./enable-notifications";
 import { remindersOn, kindEmoji, formatTime } from "@/lib/reminders";
 import { eventsOn, categoryEmoji, eventTime } from "@/lib/events";
 
@@ -132,6 +133,8 @@ export default async function DashboardPage({
           </form>
         </div>
       </div>
+
+      <EnableNotifications />
 
       {/* Hero status card */}
       <section className="rounded-card border border-line bg-card shadow-sm p-5 mb-6">

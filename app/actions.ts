@@ -2,18 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { getMembership, type Membership } from "@/lib/family";
-import { sendEmail } from "@/lib/email";
+import { sendPushToMembers } from "@/lib/push";
 
-type FamRow = { id: string; display_name: string; email: string | null };
+type FamRow = { id: string; display_name: string };
 
-/** Family members with contact email; [] if the email column isn't there yet. */
 async function familyRoster(
   supabase: Membership["supabase"],
   familyId: string
 ): Promise<FamRow[]> {
   const { data } = await supabase
     .from("family_members")
-    .select("id, display_name, email")
+    .select("id, display_name")
     .eq("family_id", familyId);
   return (data ?? []) as FamRow[];
 }
@@ -64,16 +63,15 @@ export async function createSwapRequest(formData: FormData) {
     day: "numeric",
     timeZone: "UTC",
   });
-  await Promise.all(
-    roster
-      .filter((r) => r.id !== me.id)
-      .map((r) =>
-        sendEmail(
-          r.email,
-          "New swap request in Keel",
-          `${meName} requested a swap for ${whenLabel}. Open Keel to accept or decline.`
-        )
-      )
+  await sendPushToMembers(
+    m.supabase,
+    me.family_id,
+    roster.filter((r) => r.id !== me.id).map((r) => r.id),
+    {
+      title: "New swap request",
+      body: `${meName} requested a swap for ${whenLabel}.`,
+      url: `/day/${date}`,
+    }
   );
 
   revalidatePath("/");
@@ -151,14 +149,13 @@ export async function respondToSwapRequest(formData: FormData) {
   // Notify the requester of the outcome.
   const me = m.member;
   const roster = await familyRoster(m.supabase, req.family_id);
-  const requester = roster.find((r) => r.id === req.requested_by);
   const meName = roster.find((r) => r.id === me.id)?.display_name ?? "The other parent";
-  if (requester && requester.id !== me.id) {
-    await sendEmail(
-      requester.email,
-      `Swap ${decision === "accept" ? "accepted" : "declined"}`,
-      `${meName} ${decision === "accept" ? "accepted" : "declined"} your swap request.`
-    );
+  if (req.requested_by !== me.id) {
+    await sendPushToMembers(m.supabase, req.family_id, [req.requested_by], {
+      title: `Swap ${decision === "accept" ? "accepted" : "declined"}`,
+      body: `${meName} ${decision === "accept" ? "accepted" : "declined"} your swap request.`,
+      url: "/",
+    });
   }
 
   revalidatePath("/");
