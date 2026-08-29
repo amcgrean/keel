@@ -45,6 +45,12 @@ Supabase SQL editor, or run it via the Supabase CLI:
 supabase db push
 ```
 
+The migration files alongside `schema.sql` (e.g. `pending-overnights.sql`)
+are incremental changes to apply on top of it — paste each into the SQL
+editor once. `pending-overnights.sql` adds the `status` column that powers
+logging an overnight before the other parent is on the app: it's recorded
+right away but shown as **pending** until they confirm it.
+
 ## Roadmap (short version)
 
 Full phase breakdown lives in `docs/product-plan.md`. The only thing

@@ -131,12 +131,13 @@ export default async function CalendarPage({
           <Link
             key={c.date}
             href={`/day/${c.date}`}
-            title={`${c.date} — ${labelFor(c.parentId)}${c.source === "exception" ? " (swapped)" : ""}${c.hasMarker ? " · has reminders/events" : ""}`}
+            title={`${c.date} — ${labelFor(c.parentId)}${c.pending ? " (pending)" : c.source === "exception" ? " (swapped)" : ""}${c.hasMarker ? " · has reminders/events" : ""}`}
             className={`relative aspect-square rounded-sm flex flex-col items-center justify-center text-white ${dayClass(
               c.parentId,
-              c.source
+              c.source,
+              c.pending
             )} ${c.inMonth ? "" : "opacity-35"} ${
-              c.isToday ? "ring-2 ring-inset ring-white" : ""
+              c.isToday && !c.pending ? "ring-2 ring-inset ring-white" : ""
             }`}
           >
             {c.hasMarker && (
@@ -161,6 +162,10 @@ export default async function CalendarPage({
         <div className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-sm bg-lavender" />
           <span className="text-[12px] text-ink-soft">swapped</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-sm bg-lavender ring-2 ring-inset ring-beacon" />
+          <span className="text-[12px] text-ink-soft">pending</span>
         </div>
       </div>
 

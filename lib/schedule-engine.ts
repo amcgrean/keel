@@ -47,6 +47,10 @@ export interface ScheduleException {
   parentId: ParentId;
   reason?: string;
   approvedAt?: string;
+  /** 'pending' = self-logged, not yet agreed by the other parent;
+   *  'confirmed' = agreed (accepted swap, or a confirmed overnight).
+   *  Omitted values are treated as confirmed for backwards compatibility. */
+  status?: "pending" | "confirmed";
 }
 
 export interface ManualOverride {
@@ -71,6 +75,11 @@ export interface ResolvedDay {
   /** What the base rotation alone would have said — used to render
    *  "exception" styling (dashed segments) even when a higher layer wins. */
   basedOn: ParentId;
+  /** True when the winning layer is a not-yet-agreed exception (a logged
+   *  overnight awaiting the other parent's confirmation). The assignment
+   *  still reflects who actually had the child; the flag just lets the UI
+   *  mark it as provisional. */
+  pending?: boolean;
 }
 
 function daysBetween(a: Date, b: Date): number {
@@ -126,12 +135,19 @@ export function resolveDay(inputs: ScheduleInputs, dateIso: string): ResolvedDay
 
   const exception = inputs.exceptions?.find((e) => e.date === dateIso);
   if (exception) {
-    result = { ...result, parentId: exception.parentId, source: "exception" };
+    result = {
+      ...result,
+      parentId: exception.parentId,
+      source: "exception",
+      pending: exception.status === "pending",
+    };
   }
 
   const override = inputs.overrides?.find((o) => o.date === dateIso);
   if (override) {
-    result = { ...result, parentId: override.parentId, source: "override" };
+    // A manual override is an explicit, agreed assignment — it supersedes a
+    // pending exception and is never itself provisional.
+    result = { ...result, parentId: override.parentId, source: "override", pending: false };
   }
 
   return result;

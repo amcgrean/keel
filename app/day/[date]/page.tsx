@@ -5,7 +5,9 @@ import { resolveDay } from "@/lib/schedule-engine";
 import { remindersOn, kindEmoji, formatTime, describeReminder } from "@/lib/reminders";
 import { eventsOn, categoryEmoji, eventTime, CATEGORY_META } from "@/lib/events";
 import { EventForm } from "./event-form";
+import { LogOvernightForm } from "./log-overnight-form";
 import { deleteEvent } from "../actions";
+import { confirmOvernight, cancelOvernight } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -50,10 +52,17 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
     );
   }
 
-  const { members, inputs, reminders, events } = data;
+  const { members, inputs, reminders, events, meMemberId, exceptions } = data;
   const { labelFor, dayClass } = memberMaps(members);
 
   const resolved = resolveDay(inputs, date);
+  const pendingException =
+    exceptions.find((e) => e.date === date && e.status === "pending") ?? null;
+  const iLoggedPending = pendingException?.requested_by === meMemberId;
+  // For the "log an overnight" form, default the holder to whoever the base
+  // rotation did *not* assign — the usual reason to log one.
+  const otherThanBase =
+    members.find((mm) => mm.id !== resolved.basedOn)?.id ?? resolved.parentId;
   const dayReminders = remindersOn(reminders, date);
   const dayEvents = eventsOn(events, date);
   const isToday = date === new Date().toISOString().slice(0, 10);
@@ -79,29 +88,94 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
       <h2 className="font-display text-2xl mb-4">{prettyDate}</h2>
 
       {/* Who has Patrick */}
-      <section className="rounded-card border border-line bg-card shadow-sm p-5 mb-6">
+      <section className="rounded-card border border-line bg-card shadow-sm p-5 mb-4">
         <div className="flex items-center gap-3">
           <div
-            className={`h-11 w-11 rounded-full flex items-center justify-center text-white font-display text-lg ${dayClass(resolved.parentId, resolved.source)}`}
+            className={`h-11 w-11 rounded-full flex items-center justify-center text-white font-display text-lg ${dayClass(resolved.parentId, resolved.source, resolved.pending)}`}
           >
             {labelFor(resolved.parentId)[0]}
           </div>
           <div>
             <div className="font-display text-xl">With {labelFor(resolved.parentId)}</div>
             <div className="font-mono text-[10.5px] uppercase tracking-wider text-ink-faint">
-              {SOURCE_NOTE[resolved.source] ?? resolved.source}
+              {resolved.pending
+                ? "Pending confirmation"
+                : (SOURCE_NOTE[resolved.source] ?? resolved.source)}
               {resolved.source !== "base" &&
                 ` · base was ${labelFor(resolved.basedOn)}`}
             </div>
           </div>
         </div>
-        <Link
-          href={`/?swap=${date}`}
-          className="mt-4 block text-center rounded-sm border border-line bg-paper text-sm py-2 hover:border-ink-faint"
-        >
-          Request a swap for this day
-        </Link>
+
+        {pendingException ? (
+          <div className="mt-4 rounded-sm border border-beacon/40 bg-beacon-soft/30 p-3.5">
+            <div className="text-[12.5px] text-ink-soft mb-2">
+              <span className="font-semibold">
+                {pendingException.requested_by
+                  ? labelFor(pendingException.requested_by)
+                  : "Someone"}
+              </span>{" "}
+              logged that {labelFor(pendingException.parent_id)} had Patrick this
+              night.
+              {pendingException.reason && (
+                <div className="text-ink-faint mt-0.5">“{pendingException.reason}”</div>
+              )}
+            </div>
+            {iLoggedPending ? (
+              <form>
+                <input type="hidden" name="exception_id" value={pendingException.id} />
+                <button
+                  formAction={cancelOvernight}
+                  className="w-full rounded-sm border border-line bg-card text-sm py-2 hover:border-ink-faint"
+                >
+                  Cancel this pending overnight
+                </button>
+                <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-beacon text-center">
+                  Waiting for the other parent to confirm
+                </p>
+              </form>
+            ) : (
+              <form className="flex gap-2">
+                <input type="hidden" name="exception_id" value={pendingException.id} />
+                <button
+                  formAction={confirmOvernight}
+                  name="decision"
+                  value="confirm"
+                  className="flex-1 rounded-sm bg-ink text-white font-display text-sm py-2 hover:opacity-90"
+                >
+                  Confirm
+                </button>
+                <button
+                  formAction={confirmOvernight}
+                  name="decision"
+                  value="dispute"
+                  className="flex-1 rounded-sm border border-line bg-card text-sm py-2 hover:border-ink-faint"
+                >
+                  Dispute
+                </button>
+              </form>
+            )}
+          </div>
+        ) : (
+          <Link
+            href={`/?swap=${date}`}
+            className="mt-4 block text-center rounded-sm border border-line bg-paper text-sm py-2 hover:border-ink-faint"
+          >
+            Request a swap for this day
+          </Link>
+        )}
       </section>
+
+      {/* Log who actually had Patrick (pending until confirmed) */}
+      {!pendingException && (
+        <section className="mb-6">
+          <LogOvernightForm
+            date={date}
+            members={members.map((mm) => ({ id: mm.id, label: mm.display_name }))}
+            defaultParentId={otherThanBase}
+          />
+        </section>
+      )}
 
       {/* Reminders */}
       {dayReminders.length > 0 && (

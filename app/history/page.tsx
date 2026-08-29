@@ -15,6 +15,10 @@ type AuditRow = {
 const ACTION_LABEL: Record<string, string> = {
   swap_accepted: "accepted a swap",
   swap_declined: "declined a swap",
+  overnight_logged: "logged an overnight",
+  overnight_confirmed: "confirmed an overnight",
+  overnight_disputed: "disputed an overnight",
+  overnight_canceled: "canceled a pending overnight",
   expense_added: "logged an expense",
   expense_approved: "approved an expense",
   expense_refused: "refused an expense",

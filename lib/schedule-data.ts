@@ -6,7 +6,14 @@ import { createClient } from "@/lib/supabase/server";
 
 export type Member = { id: string; display_name: string; color: string | null };
 export type Pattern = { id: string; label: string; cycle: ParentId[]; anchor_date: string };
-export type Exception = { id: string; date: string; parent_id: string; reason: string | null };
+export type Exception = {
+  id: string;
+  date: string;
+  parent_id: string;
+  reason: string | null;
+  status: "pending" | "confirmed";
+  requested_by: string | null;
+};
 
 type Supa = Awaited<ReturnType<typeof createClient>>;
 
@@ -68,7 +75,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       .maybeSingle(),
     supabase
       .from("schedule_exceptions")
-      .select("id, date, parent_id, reason")
+      .select("id, date, parent_id, reason, status, requested_by")
       .eq("family_id", familyId),
     // Reminders table may not exist until its migration is applied; a failed
     // query just yields null data, which we treat as "no reminders yet".
@@ -94,7 +101,25 @@ export async function getScheduleData(): Promise<ScheduleData> {
 
   const members = (membersRes.data ?? []) as Member[];
   const pattern = patternRes.data as Pattern | null;
-  const exceptions = (exceptionsRes.data ?? []) as Exception[];
+
+  // The `status`/`requested_by` columns arrive with the pending-overnights
+  // migration. Until it's applied the select above errors and returns no
+  // rows, so fall back to the pre-migration columns and treat every existing
+  // exception as a confirmed swap.
+  let exceptions: Exception[];
+  if (exceptionsRes.error) {
+    const { data } = await supabase
+      .from("schedule_exceptions")
+      .select("id, date, parent_id, reason")
+      .eq("family_id", familyId);
+    exceptions = ((data ?? []) as Omit<Exception, "status" | "requested_by">[]).map((e) => ({
+      ...e,
+      status: "confirmed",
+      requested_by: null,
+    }));
+  } else {
+    exceptions = (exceptionsRes.data ?? []) as Exception[];
+  }
   const reminders = (remindersRes.data ?? []) as ReminderRow[];
   const events = (eventsRes.data ?? []) as EventRow[];
   const vacationRows = (vacationsRes.data ?? []) as {
@@ -135,6 +160,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       date: e.date,
       parentId: e.parent_id,
       reason: e.reason ?? undefined,
+      status: e.status,
     })),
   };
 
@@ -169,8 +195,14 @@ export function memberMaps(members: Member[]) {
     labelFor: (id: string) => label[id] ?? "?",
     colorFor,
     // Swapped days render lavender (distinct from either parent's colour);
-    // everything else uses the parent's own colour.
-    dayClass: (id: string, source: string) =>
-      source === "exception" ? "bg-lavender" : colorFor(id),
+    // a pending (not-yet-confirmed) overnight is lavender with a gold beacon
+    // ring so it reads as provisional; everything else uses the parent's
+    // own colour.
+    dayClass: (id: string, source: string, pending = false) =>
+      pending
+        ? "bg-lavender ring-2 ring-inset ring-beacon"
+        : source === "exception"
+          ? "bg-lavender"
+          : colorFor(id),
   };
 }
