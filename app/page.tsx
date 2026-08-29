@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getScheduleData, memberMaps } from "@/lib/schedule-data";
 import { resolveRange, findExchanges } from "@/lib/schedule-engine";
-import { respondToSwapRequest } from "./actions";
+import { respondToSwapRequest, confirmOvernight, cancelOvernight } from "./actions";
 import { RequestSwapForm, type DayOption } from "./request-swap-form";
 import { EnableNotifications } from "./enable-notifications";
 import { remindersOn, kindEmoji, formatTime } from "@/lib/reminders";
@@ -51,7 +51,7 @@ export default async function DashboardPage({
     );
   }
 
-  const { supabase, familyId, meMemberId, members, inputs, reminders, events, exchangeTime } =
+  const { supabase, familyId, meMemberId, members, inputs, reminders, events, exchangeTime, exceptions } =
     data;
   const { labelFor, dayClass, colorFor } = memberMaps(members);
   const exchangeLabel = formatTime(exchangeTime);
@@ -117,6 +117,19 @@ export default async function DashboardPage({
 
   const incoming = swaps.filter((s) => s.requested_by !== meMemberId);
   const outgoing = swaps.filter((s) => s.requested_by === meMemberId);
+
+  // Pending overnights: logged deviations awaiting the other parent's OK.
+  // Ones the other parent logged need my response; ones I logged are just
+  // waiting on them.
+  const pendingOvernights = exceptions.filter((e) => e.status === "pending");
+  const overnightsToConfirm = pendingOvernights.filter((e) => e.requested_by !== meMemberId);
+  const overnightsWaiting = pendingOvernights.filter((e) => e.requested_by === meMemberId);
+  const overnightLine = (e: (typeof pendingOvernights)[number]) =>
+    `${labelFor(e.parent_id)} had Patrick ${fmt(e.date, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    })}`;
 
   const describeChanges = (changes: ProposedChange[]) =>
     changes
@@ -298,6 +311,83 @@ export default async function DashboardPage({
         </section>
       )}
 
+      {/* Pending overnights the other parent logged — need my confirmation */}
+      {overnightsToConfirm.length > 0 && (
+        <section className="mb-6">
+          <h3 className="font-display text-base mb-2">Overnights to confirm</h3>
+          <div className="flex flex-col gap-2">
+            {overnightsToConfirm.map((e) => (
+              <div
+                key={e.id}
+                className="rounded-card border border-beacon/40 bg-beacon-soft/30 p-3.5"
+              >
+                <div className="text-sm mb-1">
+                  <span className="font-semibold">
+                    {e.requested_by ? labelFor(e.requested_by) : "Someone"}
+                  </span>{" "}
+                  logged: {overnightLine(e)}
+                </div>
+                {e.reason && (
+                  <div className="text-[11.5px] text-ink-soft mb-2">“{e.reason}”</div>
+                )}
+                <form className="flex gap-2 mt-2">
+                  <input type="hidden" name="exception_id" value={e.id} />
+                  <button
+                    formAction={confirmOvernight}
+                    name="decision"
+                    value="confirm"
+                    className="flex-1 rounded-sm bg-ink text-white font-display text-sm py-2 hover:opacity-90"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    formAction={confirmOvernight}
+                    name="decision"
+                    value="dispute"
+                    className="flex-1 rounded-sm border border-line bg-card text-sm py-2 hover:border-ink-faint"
+                  >
+                    Dispute
+                  </button>
+                </form>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Overnights I logged — waiting on the other parent */}
+      {overnightsWaiting.length > 0 && (
+        <section className="mb-6">
+          <h3 className="font-display text-base mb-2">Waiting to be confirmed</h3>
+          <div className="flex flex-col gap-2">
+            {overnightsWaiting.map((e) => (
+              <div
+                key={e.id}
+                className="rounded-sm border border-line bg-paper px-3.5 py-2.5 flex items-center justify-between gap-3"
+              >
+                <div className="text-[12.5px] text-ink-soft">
+                  <Link href={`/day/${e.date}`} className="hover:text-ink">
+                    You logged: {overnightLine(e)}
+                  </Link>
+                  <span className="ml-2 font-mono text-[10px] uppercase tracking-wider text-beacon">
+                    pending
+                  </span>
+                </div>
+                <form>
+                  <input type="hidden" name="exception_id" value={e.id} />
+                  <button
+                    formAction={cancelOvernight}
+                    className="font-mono text-[10px] uppercase tracking-wider text-ink-faint hover:text-danger"
+                  >
+                    Cancel
+                  </button>
+                </form>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Request a swap */}
       <section className="mb-6">
         <RequestSwapForm
@@ -331,10 +421,10 @@ export default async function DashboardPage({
           {days.map((d, i) => (
             <div
               key={d.date}
-              className={`flex-1 relative flex items-end justify-center pb-1 ${dayClass(d.parentId, d.source)} ${
-                i === 0 ? "ring-2 ring-inset ring-white" : ""
+              className={`flex-1 relative flex items-end justify-center pb-1 ${dayClass(d.parentId, d.source, d.pending)} ${
+                i === 0 && !d.pending ? "ring-2 ring-inset ring-white" : ""
               }`}
-              title={`${d.date} — ${labelFor(d.parentId)}${d.source === "exception" ? " (swapped)" : ""}`}
+              title={`${d.date} — ${labelFor(d.parentId)}${d.pending ? " (pending)" : d.source === "exception" ? " (swapped)" : ""}`}
             >
               <span className="font-mono text-[10px] text-white/85">
                 {new Date(d.date + "T00:00:00Z").getUTCDate()}
@@ -343,7 +433,7 @@ export default async function DashboardPage({
           ))}
         </div>
         <div className="mt-1.5 font-mono text-[10px] text-ink-faint">
-          Lavender days are swapped from the base rotation.
+          Lavender days are swapped; a gold ring marks a pending overnight.
         </div>
       </section>
 
