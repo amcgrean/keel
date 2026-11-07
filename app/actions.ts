@@ -17,6 +17,21 @@ async function familyRoster(
   return (data ?? []) as FamRow[];
 }
 
+function longDate(date: string): string {
+  return new Date(date + "T00:00:00Z").toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function revalidateSchedule(date?: string) {
+  revalidatePath("/");
+  revalidatePath("/calendar");
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) revalidatePath(`/day/${date}`);
+}
+
 type ProposedChange = {
   date: string;
   from_parent_id: string | null;
@@ -159,4 +174,163 @@ export async function respondToSwapRequest(formData: FormData) {
   }
 
   revalidatePath("/");
+}
+
+/**
+ * Log an overnight one parent actually covered — a deviation from the base
+ * rotation recorded *now*, before the other parent is necessarily on the app.
+ * It's written as a `pending` schedule_exception (requested_by = me, no
+ * approver yet), so it shows up as provisional everywhere until the other
+ * parent confirms it. Unlike a swap request, this reflects a night that has
+ * already happened, so the schedule updates immediately.
+ */
+export async function logOvernight(formData: FormData) {
+  const m = await getMembership();
+  if (!m?.member) return;
+
+  const date = String(formData.get("date") ?? "");
+  const parentId = String(formData.get("parent_id") ?? "");
+  const note = String(formData.get("note") ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !parentId) return;
+
+  const me = m.member;
+  const roster = await familyRoster(m.supabase, me.family_id);
+  // parent_id must be a real member of this family.
+  if (!roster.some((r) => r.id === parentId)) return;
+
+  const { data: row } = await m.supabase
+    .from("schedule_exceptions")
+    .upsert(
+      {
+        family_id: me.family_id,
+        date,
+        parent_id: parentId,
+        reason: note || "Overnight covered",
+        requested_by: me.id,
+        approved_by: null,
+        approved_at: null,
+        status: "pending",
+      },
+      { onConflict: "family_id,date" }
+    )
+    .select("id")
+    .maybeSingle();
+
+  await m.supabase.rpc("log_audit_event", {
+    p_family_id: me.family_id,
+    p_action: "overnight_logged",
+    p_object_type: "schedule_exception",
+    p_object_id: (row as { id: string } | null)?.id ?? null,
+    p_old_value: null,
+    p_new_value: { date, parent_id: parentId, note: note || null },
+  });
+
+  const meName = roster.find((r) => r.id === me.id)?.display_name ?? "A parent";
+  const heldName = roster.find((r) => r.id === parentId)?.display_name ?? "a parent";
+  await sendPushToMembers(
+    m.supabase,
+    me.family_id,
+    roster.filter((r) => r.id !== me.id).map((r) => r.id),
+    {
+      title: "Overnight to confirm",
+      body: `${meName} logged that ${heldName} had Patrick ${longDate(date)}. Confirm or dispute it.`,
+      url: `/day/${date}`,
+    }
+  );
+
+  revalidateSchedule(date);
+}
+
+/**
+ * The other parent confirms or disputes a pending overnight. Confirming marks
+ * the exception `confirmed` (it becomes an agreed change, identical to an
+ * accepted swap); disputing removes it, restoring the base rotation for that
+ * day. Only a parent who did *not* log it can respond.
+ */
+export async function confirmOvernight(formData: FormData) {
+  const m = await getMembership();
+  if (!m?.member) return;
+
+  const id = String(formData.get("exception_id") ?? "");
+  const decision = String(formData.get("decision") ?? "");
+  if (!id || (decision !== "confirm" && decision !== "dispute")) return;
+
+  const me = m.member;
+  const { data: ex } = await m.supabase
+    .from("schedule_exceptions")
+    .select("id, family_id, date, parent_id, requested_by, status")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!ex || ex.family_id !== me.family_id || ex.status !== "pending") return;
+  // Only the counterparty confirms; the logger uses cancel instead.
+  if (ex.requested_by === me.id) return;
+
+  const now = new Date().toISOString();
+
+  if (decision === "confirm") {
+    await m.supabase
+      .from("schedule_exceptions")
+      .update({ status: "confirmed", approved_by: me.id, approved_at: now })
+      .eq("id", id);
+  } else {
+    await m.supabase.from("schedule_exceptions").delete().eq("id", id);
+  }
+
+  await m.supabase.rpc("log_audit_event", {
+    p_family_id: ex.family_id,
+    p_action: decision === "confirm" ? "overnight_confirmed" : "overnight_disputed",
+    p_object_type: "schedule_exception",
+    p_object_id: id,
+    p_old_value: { date: ex.date, parent_id: ex.parent_id },
+    p_new_value: null,
+  });
+
+  const roster = await familyRoster(m.supabase, ex.family_id);
+  const meName = roster.find((r) => r.id === me.id)?.display_name ?? "The other parent";
+  if (ex.requested_by && ex.requested_by !== me.id) {
+    await sendPushToMembers(m.supabase, ex.family_id, [ex.requested_by], {
+      title: `Overnight ${decision === "confirm" ? "confirmed" : "disputed"}`,
+      body: `${meName} ${decision === "confirm" ? "confirmed" : "disputed"} the overnight on ${longDate(ex.date)}.`,
+      url: `/day/${ex.date}`,
+    });
+  }
+
+  revalidateSchedule(ex.date);
+}
+
+/**
+ * Cancel a pending overnight you logged (before the other parent responds).
+ * Removes the provisional exception and restores the base rotation.
+ */
+export async function cancelOvernight(formData: FormData) {
+  const m = await getMembership();
+  if (!m?.member) return;
+
+  const id = String(formData.get("exception_id") ?? "");
+  if (!id) return;
+
+  const me = m.member;
+  const { data: ex } = await m.supabase
+    .from("schedule_exceptions")
+    .select("id, family_id, date, parent_id, requested_by, status")
+    .eq("id", id)
+    .maybeSingle();
+
+  // Only the logger can cancel, and only while it's still pending.
+  if (!ex || ex.family_id !== me.family_id || ex.status !== "pending") return;
+  if (ex.requested_by !== me.id) return;
+
+  await m.supabase.from("schedule_exceptions").delete().eq("id", id);
+
+  await m.supabase.rpc("log_audit_event", {
+    p_family_id: ex.family_id,
+    p_action: "overnight_canceled",
+    p_object_type: "schedule_exception",
+    p_object_id: id,
+    p_old_value: { date: ex.date, parent_id: ex.parent_id },
+    p_new_value: null,
+  });
+
+  revalidateSchedule(ex.date);
 }
